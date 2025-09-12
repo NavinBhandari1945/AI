@@ -1,0 +1,373 @@
+import tensorflow as tf
+import xgboost as xgb
+import numpy as np
+import json
+import re
+import os
+
+# Verify TensorFlow version
+print(f"TensorFlow version: {tf.__version__}")
+
+# Function to parse XGBoost tree JSON into a flat structure
+def parse_tree_to_arrays(tree_json, max_depth=10):
+    nodes = []
+    def traverse_node(node, depth=0):
+        if depth > max_depth or 'leaf' in node:
+            leaf_value = float(node.get('leaf', 0.0))
+            nodes.append({'leaf': leaf_value, 'feature_idx': -1, 'threshold': 0.0, 'left_idx': -1, 'right_idx': -1})
+            return len(nodes) - 1
+        feature_idx = int(re.search(r'f(\d+)', node['split']).group(1)) if 'split' in node else -1
+        threshold = float(node.get('split_condition', 0.0))
+        left_child = node.get('children', [{}])[0]
+        right_child = node.get('children', [{}])[1]
+        left_idx = traverse_node(left_child, depth + 1)
+        right_idx = traverse_node(right_child, depth + 1)
+        nodes.append({
+            'feature_idx': feature_idx,
+            'threshold': threshold,
+            'left_idx': left_idx,
+            'right_idx': right_idx,
+            'leaf': 0.0
+        })
+        return len(nodes) - 1
+    root_idx = traverse_node(tree_json)
+    return nodes
+
+# Define the XGBoost-to-TFLite conversion function
+def create_xgboost_tf_model(xgb_model, n_features, n_classes=4):
+    booster = xgb_model.get_booster()
+    trees = booster.get_dump(with_stats=True, dump_format='json')
+    trees_json = [json.loads(tree) for tree in trees]
+    tree_structures = [parse_tree_to_arrays(tree) for tree in trees_json]
+    num_trees_per_class = len(trees_json) // n_classes  # XGBoost creates trees_per_class
+
+    class XGBoostTFModel(tf.Module):
+        def __init__(self):
+            super().__init__()
+            self.n_classes = n_classes
+            self.n_features = n_features
+            self.num_trees = len(tree_structures)
+            self.num_trees_per_class = num_trees_per_class
+            # Store tree structures as TensorFlow constants
+            self.tree_nodes = []
+            for tree in tree_structures:
+                feature_indices = tf.constant([n['feature_idx'] for n in tree], dtype=tf.int32)
+                thresholds = tf.constant([n['threshold'] for n in tree], dtype=tf.float32)
+                left_indices = tf.constant([n['left_idx'] for n in tree], dtype=tf.int32)
+                right_indices = tf.constant([n['right_idx'] for n in tree], dtype=tf.int32)
+                leaf_values = tf.constant([n['leaf'] for n in tree], dtype=tf.float32)
+                self.tree_nodes.append((feature_indices, thresholds, left_indices, right_indices, leaf_values))
+
+        @tf.function(input_signature=[tf.TensorSpec(shape=[None, n_features], dtype=tf.float32)])
+        def __call__(self, x):
+            batch_size = tf.shape(x)[0]
+            scores = tf.zeros([batch_size, self.n_classes], dtype=tf.float32)
+
+            # Evaluate trees and assign scores to the correct class
+            for tree_idx in range(self.num_trees):
+                feature_indices, thresholds, left_indices, right_indices, leaf_values = self.tree_nodes[tree_idx]
+                class_idx = tree_idx // self.num_trees_per_class  # Determine which class this tree contributes to
+                tree_scores = self._evaluate_tree(x, feature_indices, thresholds, left_indices, right_indices, leaf_values)
+                # Add tree_scores to the corresponding class column
+                indices = tf.stack([tf.range(batch_size), tf.fill([batch_size], class_idx)], axis=1)
+                scores += tf.scatter_nd(indices, tree_scores, [batch_size, self.n_classes])
+
+            probabilities = tf.nn.softmax(scores)
+            return tf.argmax(probabilities, axis=1, output_type=tf.int32)
+
+        def _evaluate_tree(self, inputs, feature_indices, thresholds, left_indices, right_indices, leaf_values):
+            batch_size = tf.shape(inputs)[0]
+            node_indices = tf.zeros([batch_size], dtype=tf.int32)
+            leaf_scores = tf.zeros([batch_size], dtype=tf.float32)
+
+            def body(i, node_indices, leaf_scores):
+                # Gather node properties for the current node_indices
+                node_mask = tf.range(tf.shape(node_indices)[0]) < batch_size
+                valid_node_indices = tf.where(node_mask, node_indices, 0)
+                
+                # Extract node properties
+                feature_idx = tf.gather(feature_indices, valid_node_indices)
+                threshold = tf.gather(thresholds, valid_node_indices)
+                left_idx = tf.gather(left_indices, valid_node_indices)
+                right_idx = tf.gather(right_indices, valid_node_indices)
+                leaf_value = tf.gather(leaf_values, valid_node_indices)
+
+                # Create a mask for leaf nodes
+                is_leaf = tf.equal(feature_idx, -1)
+                
+                # Update leaf scores for leaf nodes
+                leaf_scores = tf.where(is_leaf, leaf_value, leaf_scores)
+
+                # Compute feature values for all features to avoid dynamic indexing
+                feature_values = tf.zeros([batch_size], dtype=tf.float32)
+                for f_idx in range(self.n_features):
+                    feature_mask = tf.equal(feature_idx, f_idx)
+                    feature_values += tf.where(
+                        feature_mask,
+                        tf.gather(inputs, f_idx, axis=1),
+                        tf.zeros([batch_size], dtype=tf.float32)
+                    )
+                
+                # Compute conditions for non-leaf nodes
+                condition = tf.where(is_leaf, False, feature_values <= threshold)
+                
+                # Update node indices
+                next_indices = tf.where(is_leaf, node_indices, tf.where(condition, left_idx, right_idx))
+                
+                return i + 1, next_indices, leaf_scores
+
+            max_nodes = tf.shape(feature_indices)[0]
+            _, _, final_leaf_scores = tf.while_loop(
+                cond=lambda i, *_: i < max_nodes,
+                body=body,
+                loop_vars=[0, node_indices, leaf_scores],
+                shape_invariants=[
+                    tf.TensorShape([]),
+                    tf.TensorShape([None]),
+                    tf.TensorShape([None])
+                ]
+            )
+            return final_leaf_scores
+
+    return XGBoostTFModel()
+
+# Create TensorFlow model
+n_features = X_train.shape[1]
+xgb_tf_model = create_xgboost_tf_model(xgb_model, n_features, n_classes=len(lbe.classes_))
+
+# Convert to TFLite for tflite_flutter (mobile compatibility)
+converter = tf.lite.TFLiteConverter.from_concrete_functions(
+    [xgb_tf_model.__call__.get_concrete_function()]
+)
+converter.target_spec.supported_ops = [
+    tf.lite.OpsSet.TFLITE_BUILTINS,
+    tf.lite.OpsSet.SELECT_TF_OPS  # Allow select TF ops for tflite_flutter
+]
+converter.experimental_new_converter = True
+converter.allow_custom_ops = False  # Avoid custom ops
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+try:
+    tflite_model = converter.convert()
+except Exception as e:
+    print(f"Conversion error: {e}")
+    raise
+
+# Save the TFLite model
+model_path = 'xgb_model_mobile.tflite'
+with open(model_path, 'wb') as f:
+    f.write(tflite_model)
+print(f"TFLite model saved as '{model_path}' for use in tflite_flutter")
+
+# Print label mapping
+print("\nMapping of target values to numerical values:")
+for index, class_label in enumerate(lbe.classes_):
+    print(f"{class_label} -> {index}")
+
+# Load TFLite model for testing
+interpreter = tf.lite.Interpreter(model_path=model_path)
+interpreter.allocate_tensors()
+
+# Get input and output details
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+print("\nInput details:", input_details)
+print("Output details:", output_details)
+
+# Test 1: Single sample prediction
+test_sample = X_test[0:1].astype(np.float32)
+interpreter.set_tensor(input_details[0]['index'], test_sample)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+predicted_class = output_data[0]
+predicted_label = lbe.inverse_transform([predicted_class])[0]
+print(f"\nTest 1: Single Sample Prediction")
+print(f"Predicted label: {predicted_label}")
+original_pred = xgb_model.predict(test_sample)[0]
+original_label = lbe.inverse_transform([original_pred])[0]
+print(f"Original XGBoost label: {original_label}")
+print("Match:", predicted_label == original_label)
+
+# Test 2: Batch prediction
+batch_size = min(10, X_test.shape[0])
+batch_test = X_test[:batch_size].astype(np.float32)
+interpreter.resize_tensor_input(input_details[0]['index'], [batch_size, n_features])
+interpreter.allocate_tensors()
+interpreter.set_tensor(input_details[0]['index'], batch_test)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+predicted_classes = output_data
+predicted_labels = lbe.inverse_transform(predicted_classes)
+original_preds = xgb_model.predict(batch_test)
+original_labels = lbe.inverse_transform(original_preds)
+
+print("\nTest 2: Batch Prediction Results:")
+for i in range(batch_size):
+    print(f"Sample {i+1}: TFLite label = {predicted_labels[i]}, Original XGBoost label = {original_labels[i]}, Match = {predicted_labels[i] == original_labels[i]}")
+batch_accuracy = np.mean(predicted_classes == original_preds)
+print(f"Batch accuracy match: {batch_accuracy * 100:.2f}%")
+
+# Test 3: Full test set prediction
+tflite_preds = []
+interpreter.resize_tensor_input(input_details[0]['index'], [1, n_features])
+interpreter.allocate_tensors()
+for sample in X_test:
+    interpreter.set_tensor(input_details[0]['index'], sample.reshape(1, -1).astype(np.float32))
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    tflite_preds.append(output_data[0])
+tflite_preds = np.array(tflite_preds)
+original_preds = xgb_model.predict(X_test)
+full_accuracy = np.mean(tflite_preds == original_preds)
+print(f"\nTest 3: Full Test Set Accuracy Match: {full_accuracy * 100:.2f}%")
+
+# Test 4: Edge cases
+# 4.1: Zero input
+zero_input = np.zeros((1, n_features), dtype=np.float32)
+interpreter.set_tensor(input_details[0]['index'], zero_input)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print("\nTest 4.1: Zero Input Prediction Class:", output_data[0])
+
+# 4.2: Extreme large values
+extreme_large = np.full((1, n_features), 1e6, dtype=np.float32)
+interpreter.set_tensor(input_details[0]['index'], extreme_large)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print("Test 4.2: Extreme Large Input Prediction Class:", output_data[0])
+
+# 4.3: Extreme small values
+extreme_small = np.full((1, n_features), -1e6, dtype=np.float32)
+interpreter.set_tensor(input_details[0]['index'], extreme_small)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print("Test 4.3: Extreme Small Input Prediction Class:", output_data[0])
+
+# 4.4: NaN input
+nan_input = np.full((1, n_features), np.nan, dtype=np.float32)
+try:
+    interpreter.set_tensor(input_details[0]['index'], nan_input)
+    interpreter.invoke()
+    output_data = interpreter.get_tensor(output_details[0]['index'])
+    print("Test 4.4: NaN Input Prediction Class:", output_data[0])
+except Exception as e:
+    print("Test 4.4: NaN Input Test Error (expected possible failure):", str(e))
+
+# 4.5: Invalid shape
+try:
+    invalid_input = np.random.rand(1, n_features + 1).astype(np.float32)
+    interpreter.set_tensor(input_details[0]['index'], invalid_input)
+    interpreter.invoke()
+    print("Test 4.5: Invalid Shape Test Failed (unexpected)")
+except ValueError as e:
+    print("Test 4.5: Invalid Shape Test Error (expected):", str(e))
+
+# Test 5: Model op compatibility check for tflite_flutter
+print("\nTest 5: TFLite Model Op Compatibility Check")
+try:
+    interpreter.allocate_tensors()
+    op_details = interpreter.get_tensor_details()
+    print("Tensors in model:", len(op_details))
+    model_ops = set()
+    for tensor in op_details:
+        if 'op_name' in tensor:
+            model_ops.add(tensor['op_name'])
+    print("Detected ops:", model_ops)
+    unsupported_ops = ['CUSTOM']  # tflite_flutter supports most TF ops, but avoid custom
+    has_unsupported = any(op in model_ops for op in unsupported_ops)
+    print("Has potential unsupported ops for tflite_flutter:", has_unsupported)
+    if has_unsupported:
+        print("Warning: Model contains custom ops that may not be supported in tflite_flutter.")
+except Exception as e:
+    print(f"Op compatibility check failed: {e}")
+
+# Test 6: File integrity check
+if os.path.exists(model_path):
+    print(f"\nTest 6: Model File Integrity")
+    print(f"Model file '{model_path}' exists, size: {os.path.getsize(model_path)} bytes")
+else:
+    print("\nTest 6: Model File Integrity")
+    print("Model file not found!")
+
+# Test 7: Dynamic batch size
+batch_test_2 = X_test[:2].astype(np.float32)
+interpreter.resize_tensor_input(input_details[0]['index'], [2, n_features])
+interpreter.allocate_tensors()
+interpreter.set_tensor(input_details[0]['index'], batch_test_2)
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print("\nTest 7: Dynamic Batch Size 2 Test Output:", output_data)
+
+interpreter.resize_tensor_input(input_details[0]['index'], [1, n_features])
+interpreter.allocate_tensors()
+interpreter.set_tensor(input_details[0]['index'], X_test[0:1].astype(np.float32))
+interpreter.invoke()
+output_data = interpreter.get_tensor(output_details[0]['index'])
+print("Test 7: Dynamic Batch Size 1 Test Output:", output_data)
+
+# Test 8: Invalid tensor type
+try:
+    invalid_input = np.random.rand(1, n_features).astype(np.float64)
+    interpreter.set_tensor(input_details[0]['index'], invalid_input)
+    interpreter.invoke()
+    print("Test 8: Invalid Tensor Type Test Failed (unexpected)")
+except ValueError as e:
+    print("Test 8: Invalid Tensor Type Test Error (expected):", str(e))
+
+print("\nAll tests completed. For tflite_flutter compatibility, ensure accuracy is high and no unsupported ops are detected.")
+
+
+
+outputTensorFlow version: 2.15.0
+WARNING:absl:Please consider providing the trackable_obj argument in the from_concrete_functions. Providing without the trackable_obj argument is deprecated and it will use the deprecated conversion path.
+TFLite model saved as 'xgb_model_mobile.tflite' for use in tflite_flutter
+
+Mapping of target values to numerical values:
+Cloudy -> 0
+Rainy -> 1
+Snowy -> 2
+Sunny -> 3
+
+Input details: [{'name': 'x', 'index': 0, 'shape': array([ 1, 15]), 'shape_signature': array([-1, 15]), 'dtype': <class 'numpy.float32'>, 'quantization': (0.0, 0), 'quantization_parameters': {'scales': array([], dtype=float32), 'zero_points': array([], dtype=int32), 'quantized_dimension': 0}, 'sparsity_parameters': {}}]
+Output details: [{'name': 'Identity', 'index': 5666, 'shape': array([1]), 'shape_signature': array([-1]), 'dtype': <class 'numpy.int32'>, 'quantization': (0.0, 0), 'quantization_parameters': {'scales': array([], dtype=float32), 'zero_points': array([], dtype=int32), 'quantized_dimension': 0}, 'sparsity_parameters': {}}]
+
+Test 1: Single Sample Prediction
+Predicted label: Cloudy
+Original XGBoost label: Rainy
+Match: False
+
+Test 2: Batch Prediction Results:
+Sample 1: TFLite label = Cloudy, Original XGBoost label = Rainy, Match = False
+Sample 2: TFLite label = Cloudy, Original XGBoost label = Sunny, Match = False
+Sample 3: TFLite label = Cloudy, Original XGBoost label = Rainy, Match = False
+Sample 4: TFLite label = Cloudy, Original XGBoost label = Cloudy, Match = True
+Sample 5: TFLite label = Cloudy, Original XGBoost label = Sunny, Match = False
+Sample 6: TFLite label = Cloudy, Original XGBoost label = Rainy, Match = False
+Sample 7: TFLite label = Cloudy, Original XGBoost label = Snowy, Match = False
+Sample 8: TFLite label = Cloudy, Original XGBoost label = Cloudy, Match = True
+Sample 9: TFLite label = Cloudy, Original XGBoost label = Sunny, Match = False
+Sample 10: TFLite label = Cloudy, Original XGBoost label = Sunny, Match = False
+Batch accuracy match: 20.00%
+
+Test 3: Full Test Set Accuracy Match: 24.32%
+
+Test 4.1: Zero Input Prediction Class: 0
+Test 4.2: Extreme Large Input Prediction Class: 0
+Test 4.3: Extreme Small Input Prediction Class: 0
+Test 4.4: NaN Input Prediction Class: 0
+Test 4.5: Invalid Shape Test Error (expected): Cannot set tensor: Dimension mismatch. Got 16 but expected 15 for dimension 1 of input 0.
+
+Test 5: TFLite Model Op Compatibility Check
+Tensors in model: 5667
+Detected ops: set()
+Has potential unsupported ops for tflite_flutter: False
+
+Test 6: Model File Integrity
+Model file 'xgb_model_mobile.tflite' exists, size: 7164348 bytes
+
+Test 7: Dynamic Batch Size 2 Test Output: [0 0]
+Test 7: Dynamic Batch Size 1 Test Output: [0]
+Test 8: Invalid Tensor Type Test Error (expected): Cannot set tensor: Got value of type FLOAT64 but expected type FLOAT32 for input 0, name: x 
+
+All tests completed. For tflite_flutter compatibility, ensure accuracy is high and no unsupported ops are detected.
+
+
