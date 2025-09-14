@@ -1,6 +1,6 @@
 
-import 'package:app/views/Home.dart';
-import 'package:app/views/Home_2_M.dart';
+import 'package:app/views/Home_Web.dart';
+import 'package:app/views/Home_Mobile.dart';
 import 'package:flutter/material.dart';
 
 
@@ -19,7 +19,13 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const WeatherInputPage(),
+
+      // for web
+      home: const WeatherInputPageWeb(),
+
+      // for mobile
+      // home: const WeatherInputPageMobile(),
+
     );
   }
 }

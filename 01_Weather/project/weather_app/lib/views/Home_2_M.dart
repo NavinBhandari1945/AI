@@ -41,9 +41,9 @@ class _WeatherInputPageState extends State<WeatherInputPage> {
   Future<void> _loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset('model/xgb_model_mobile.tflite');
-      debugPrint("✅ Model loaded successfully!");
+      debugPrint("Model loaded successfully!");
     } catch (e) {
-      debugPrint("❌ Failed to load model: $e");
+      debugPrint("Failed to load model: $e");
       setState(() => _errorMessage = "Failed to load model: $e");
     }
   }

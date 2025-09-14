@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:tflite_web/tflite_web.dart';
 
-class WeatherInputPage extends StatefulWidget {
-  const WeatherInputPage({super.key});
+class WeatherInputPageWeb extends StatefulWidget {
+  const WeatherInputPageWeb({super.key});
 
   @override
-  State<WeatherInputPage> createState() => _WeatherInputPageState();
+  State<WeatherInputPageWeb> createState() => _WeatherInputPageWebState();
 }
 
-class _WeatherInputPageState extends State<WeatherInputPage> {
+class _WeatherInputPageWebState extends State<WeatherInputPageWeb> {
   // Controllers for all 15 features
   final tempController = TextEditingController();
   final humidityController = TextEditingController();

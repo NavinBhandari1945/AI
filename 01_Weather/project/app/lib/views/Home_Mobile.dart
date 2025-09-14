@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'dart:typed_data';
 
-class WeatherInputPage extends StatefulWidget {
-  const WeatherInputPage({super.key});
+class WeatherInputPageMobile extends StatefulWidget {
+  const WeatherInputPageMobile({super.key});
 
   @override
-  State<WeatherInputPage> createState() => _WeatherInputPageState();
+  State<WeatherInputPageMobile> createState() => _WeatherInputPageMobileState();
 }
 
-class _WeatherInputPageState extends State<WeatherInputPage> {
+class _WeatherInputPageMobileState extends State<WeatherInputPageMobile> {
   // Controllers for 15 input fields
   final tempController = TextEditingController();
   final humidityController = TextEditingController();
@@ -44,9 +44,9 @@ class _WeatherInputPageState extends State<WeatherInputPage> {
   Future<void> _loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset('assets/model/xgb_model_mobile.tflite');
-      debugPrint("✅ Model loaded successfully!");
+      debugPrint("Model loaded successfully!");
     } catch (e, stackTrace) {
-      debugPrint("❌ Failed to load model: $e\nStackTrace: $stackTrace");
+      debugPrint("Failed to load model: $e\nStackTrace: $stackTrace");
       setState(() => _errorMessage = "Failed to load model: $e");
     }
   }
@@ -99,6 +99,7 @@ class _WeatherInputPageState extends State<WeatherInputPage> {
 
       // Prepare input & output tensor
       var input = Float32List.fromList(inputValues).reshape([1, 15]);
+
       var output = Int32List(1).reshape([1]); // Model outputs [1] int32 (class index)
 
       // Run inference
@@ -114,7 +115,7 @@ class _WeatherInputPageState extends State<WeatherInputPage> {
 
       debugPrint("Prediction: $_prediction (Class Index: $predictedClass)");
     } catch (e, stackTrace) {
-      debugPrint("❌ Prediction failed: $e\nStackTrace: $stackTrace");
+      debugPrint("Prediction failed: $e\nStackTrace: $stackTrace");
       setState(() => _errorMessage = "Prediction failed: $e");
     }
   }
