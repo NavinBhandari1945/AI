@@ -1,7 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'Views/Home/welcome_screen.dart';
 
-import 'Views/Home/home_screen.dart';
 
 late List<CameraDescription> Camera;
 
@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const Home_Screen(),
+      home: const WelcomeScreen(),
     );
   }
 }
