@@ -27,7 +27,7 @@ class _Home_ScreenState extends State<Home_Screen> {
     super.initState();
     _loadModelAndLabels();
   }
-
+  
   Future<void> _loadModelAndLabels() async {
     try {
       // Load the model

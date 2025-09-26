@@ -98,9 +98,18 @@ class _WeatherInputPageMobileState extends State<WeatherInputPageMobile> {
       ];
 
       // Prepare input & output tensor
+
+//Even though the raw data has only 1 element, TensorFlow Lite (and most ML frameworks) 
+//expect inputs/outputs to be tensors, which always have an explicit shape.
+// Without reshape → it’s just [element] (a Dart list with length 1).
+// With reshape → it’s a tensor with shape [1] (still 1 element, but now explicitly marked as a rank-1 tensor).
+
       var input = Float32List.fromList(inputValues).reshape([1, 15]);
 
-      var output = Int32List(1).reshape([1]); // Model outputs [1] int32 (class index)
+
+// Model outputs [1] int32 (class index)
+
+      var output = Int32List(1).reshape([1]); 
 
       // Run inference
       _interpreter!.run(input, output);
