@@ -20,9 +20,7 @@ class MyApp extends StatelessWidget {
       ),
 
       //routing home screen
-      home: HomeScreen(
-
-      ),
+      home: HomeScreen(),
     );
   }
 }
