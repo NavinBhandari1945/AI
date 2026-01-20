@@ -11,6 +11,8 @@ import '../recognize/reconize_home.dart';
 import '../scan/scan_home.dart';
 import 'getx/image_picker_gallery.dart';
 
+
+//home screen to select option for scan recognize
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 

@@ -17,6 +17,7 @@ class Reconize_Home extends StatefulWidget {
 }
 
 class _Reconize_HomeState extends State<Reconize_Home> {
+  //image controller
   final gallery_image_pick=Get.put(pick_single_photo_getx_int_gallery());
   final camera_image_pick=Get.put(pick_single_photo_getx_int_camera());
   @override
@@ -39,6 +40,8 @@ class _Reconize_HomeState extends State<Reconize_Home> {
                 children:
                 [
 
+                  //load image from camera
+
                   InkWell(
                     child: Icon(
                       Icons.camera,
@@ -59,6 +62,8 @@ class _Reconize_HomeState extends State<Reconize_Home> {
                     },
                   ),
 
+
+                  //load image from gallery
                   InkWell(
                     child: Icon(
                       Icons.image,

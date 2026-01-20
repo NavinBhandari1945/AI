@@ -43,6 +43,7 @@ class _WeatherInputPageMobileState extends State<WeatherInputPageMobile> {
 
   Future<void> _loadModel() async {
     try {
+      //loading model
       _interpreter = await Interpreter.fromAsset('assets/model/xgb_model_mobile.tflite');
       debugPrint("Model loaded successfully!");
     } catch (e, stackTrace) {
@@ -166,6 +167,8 @@ class _WeatherInputPageMobileState extends State<WeatherInputPageMobile> {
       ),
     );
   }
+
+  //building textfield for input
 
   Widget _buildTextField(TextEditingController controller, String label) {
     return Padding(

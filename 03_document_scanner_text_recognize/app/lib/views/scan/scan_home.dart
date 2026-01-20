@@ -11,6 +11,9 @@ class _Scan_HomeState extends State<Scan_Home> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      body: Container(
+        color: Colors.red,
+      ),
 
 
     );

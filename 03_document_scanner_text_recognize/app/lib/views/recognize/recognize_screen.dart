@@ -14,12 +14,12 @@ class _Recognize_ScreenState extends State<Recognize_Screen> {
   late TextRecognizer textRecognizer;
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
     Do_Text_Recognizition();
   }
 
+  //storing recognize text
   String Result="";
 
   Do_Text_Recognizition()async{
@@ -30,19 +30,6 @@ class _Recognize_ScreenState extends State<Recognize_Screen> {
     setState(() {
       Result;
     });
-    for (TextBlock block in recognizedText.blocks) {
-      final Rect rect = block.boundingBox;
-      final List<Point<int>> cornerPoints = block.cornerPoints;
-      final String text = block.text;
-      final List<String> languages = block.recognizedLanguages;
-
-      for (TextLine line in block.lines) {
-        // Same getters as TextBlock
-        for (TextElement element in line.elements) {
-          // Same getters as TextBlock
-        }
-      }
-    }
   }
 
   @override
@@ -81,6 +68,7 @@ class _Recognize_ScreenState extends State<Recognize_Screen> {
                           Container(
                             child:  Text("Result",style:TextStyle(color: Colors.black,fontSize: shortestval*0.05),),
                           ),
+                          //displaying recoginize text
                           Text(Result,style:TextStyle(color: Colors.black,fontSize: shortestval*0.05),),
                         ],
                       )),

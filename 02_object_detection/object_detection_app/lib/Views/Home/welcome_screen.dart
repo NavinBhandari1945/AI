@@ -36,6 +36,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: () {
+                //routing home  screen
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const Home_Screen()),
