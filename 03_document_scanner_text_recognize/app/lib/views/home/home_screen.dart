@@ -1,12 +1,7 @@
-import 'dart:io';
-
-import 'package:app/views/common%20widget/toast_message.dart';
 import 'package:app/views/home/getx/image_picker_camera.dart';
-import 'package:app/views/recognize/recognize_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_core/src/get_main.dart';
-
 import '../recognize/reconize_home.dart';
 import '../scan/scan_home.dart';
 import 'getx/image_picker_gallery.dart';
@@ -46,67 +41,70 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Container(
                 height: heightval*0.10,
                 color:Colors.green,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children:
-                  [
-
-                    InkWell(
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.scanner,
-                            color: Colors.red,
-                            size: shortestval*0.15,
-                          ),
-                          Text("Scan",style: TextStyle(fontSize: shortestval*0.05),)
-                        ],
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children:
+                    [
+                      //scan ,crop and save as pdf
+                      InkWell(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.scanner,
+                              color: Colors.red,
+                              size: shortestval*0.15,
+                            ),
+                            Text("Scan",style: TextStyle(fontSize: shortestval*0.05),)
+                          ],
+                        ),
+                        onTap: (){
+                          Navigator.push(context, MaterialPageRoute(builder: (context) {
+                            return UniversalDocScanner();
+                          },));
+                        },
                       ),
-                      onTap: (){
-                        Navigator.push(context, MaterialPageRoute(builder: (context) {
-                          return Scan_Home();
-                        },));
-                      },
-                    ),
 
-                    InkWell(
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.document_scanner,
-                            color: Colors.red,
-                            size: shortestval*0.15,
-                          ),
-                          Text("Recognize",style: TextStyle(fontSize: shortestval*0.05),)
-                        ],
+
+                      //extract contents of resources
+                      InkWell(
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.document_scanner,
+                              color: Colors.red,
+                              size: shortestval*0.15,
+                            ),
+                            Text("Recognize",style: TextStyle(fontSize: shortestval*0.05),)
+                          ],
+                        ),
+                        onTap: (){
+                          Navigator.push(context, MaterialPageRoute(builder: (context) {
+                            return Reconize_Home();
+                          },));
+                        },
                       ),
-                      onTap: (){
-                        Navigator.push(context, MaterialPageRoute(builder: (context) {
-                          return Reconize_Home();
-                        },));
-                      },
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
 
+            //loading image from assets
             Expanded(
               child: Card(
                 color: Colors.black,
                 child: Container(
                   decoration: BoxDecoration(
                     image: DecorationImage(
-                      image: NetworkImage(
-                        "https://cdn.prod.website-files.com/61e7d259b7746e3f63f0b6be/62dff621ff6976b401611642_Sans%20titre%20(20).png",
-                      ),
-                      fit: BoxFit.fill,   // 🔥 Makes image fill the entire box
+                      image: AssetImage("assets/image2.png"),
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),
               ),
             ),
-
 
           ],
         ),

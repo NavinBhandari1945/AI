@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_core/src/get_main.dart';
 
-import '../common widget/toast_message.dart';
+
 import '../home/getx/image_picker_camera.dart';
 import '../home/getx/image_picker_gallery.dart';
 
@@ -57,7 +57,13 @@ class _Reconize_HomeState extends State<Reconize_Home> {
                         },));
                       }
                       else{
-                        Toastget().Toastmsg("No image select from camera");
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("No image selected from camera"),
+                            behavior: SnackBarBehavior.floating,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
                       }
                     },
                   ),
@@ -79,7 +85,15 @@ class _Reconize_HomeState extends State<Reconize_Home> {
                         },));
                       }
                       else{
-                        Toastget().Toastmsg("No image select from gallery");
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("No image selected from gallery"),
+                            behavior: SnackBarBehavior.floating,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+
                       }
                     },
                   ),
