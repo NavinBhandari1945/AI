@@ -30,7 +30,9 @@ class _Home_ScreenState extends State<Home_Screen> {
     Load_Labels();
   }
 
+
   Future<void> Load_Model() async {
+    //load the TFLite model from assets and create an interpreter
     interpreter = await Interpreter.fromAsset(
         "assets/classification_model/animal_classifier.tflite"
     );
