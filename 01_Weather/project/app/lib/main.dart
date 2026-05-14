@@ -1,7 +1,5 @@
 
 import 'package:app/views/Home_Web.dart';
-import 'package:app/views/Home_Mobile.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 
@@ -22,8 +20,11 @@ class MyApp extends StatelessWidget {
       ),
 
       // for web and mobile routing
-      home:kIsWeb? 
-      const WeatherInputPageWeb():WeatherInputPageMobile(),
+      home:const WeatherInputPageWeb()
+
     );
   }
 }
+
+
+

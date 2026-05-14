@@ -1,7 +1,6 @@
 import 'package:app/views/home/getx/image_picker_camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get/get_core/src/get_main.dart';
 import '../recognize/reconize_home.dart';
 import '../scan/scan_home.dart';
 import 'getx/image_picker_gallery.dart';

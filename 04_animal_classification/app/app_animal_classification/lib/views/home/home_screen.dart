@@ -51,6 +51,7 @@ class _Home_ScreenState extends State<Home_Screen> {
 
 
   Future<List<List<List<List<double>>>>> Pre_Process_Image(File imageFile) async {
+    print("image process start");
     final bytes = await imageFile.readAsBytes();
     img.Image? originalImage = img.decodeImage(bytes);
     img.Image resized = img.copyResize(
@@ -77,11 +78,12 @@ class _Home_ScreenState extends State<Home_Screen> {
         ),
       ),
     );
-
+    print("image process start");
     return input;
   }
 
   Future<void> Run_Model(File imageFile) async {
+    print("model start");
 
     if (interpreter == null) return;
 
@@ -107,6 +109,7 @@ class _Home_ScreenState extends State<Home_Screen> {
     setState(() {
       predictionResult = labels[maxIndex];
     });
+    print("model predict");
   }
 
 
@@ -121,6 +124,8 @@ class _Home_ScreenState extends State<Home_Screen> {
     setState(() {
       selectedImage = imageFile;
     });
+
+    print("image picked 1");
 
     await Run_Model(imageFile);
   }
