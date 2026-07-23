@@ -39,6 +39,8 @@ class _Home_ScreenState extends State<Home_Screen> {
     print('Model loaded sucess');
   }
 
+  //loading labels for the model from assets
+
   Future<void> Load_Labels() async {
     final labelData = await rootBundle.loadString(
         "assets/classification_model/labels.json"
